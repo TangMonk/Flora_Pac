@@ -9,7 +9,8 @@ import argparse
 import math
 import socket
 import struct
-
+import pickle
+import os.path
 
 def ip2long(ip):
     packedIP = socket.inet_aton(ip)
@@ -43,7 +44,7 @@ function FindProxyForURL(url, host) {
         intLines = intLines + 1
         strLines = strLines + """
         [%d, %d]"""%(ip, mask)
-    strLines = strLines + """
+    strLines += """
     ];
 
     var safeDomains = [
@@ -390,6 +391,8 @@ function FindProxyForURL(url, host) {
         16402
     ];
 
+    
+
     function convertAddress(ipchars) {
         var bytes = ipchars.split('.');
         var result = ((bytes[0] & 0xff) << 24) |
@@ -414,6 +417,17 @@ function FindProxyForURL(url, host) {
             }
         } while (left + 1 <= right)
         return false;
+    }
+    
+    var except_domain = [
+        "*.youtube.*",
+        "youtube-nocookie.com",
+        "youtube.com",
+        "youtubecn.com"
+    ];
+
+    if (except_domain.contains(host)){
+        return '{proxy}';
     }
 
     if (isPlainHostName(host)
@@ -449,10 +463,10 @@ function FindProxyForURL(url, host) {
         return 'DIRECT';
     }
 
-    return '%s';
+    return '{proxy}';
 
 }
-"""%(proxy)
+""" % {"proxy": proxy}
     rfile.write(strLines)
     rfile.close()
     print ("Rules: %d items.\n"
@@ -477,6 +491,12 @@ def pac_server(port):
 
 
 def fetch_ip_data():
+    # Load ip file, if ip file exists
+    ip_list_file_pat = "./ip_list"
+    if os.path.exists(ip_list_file_pat):
+        f = open(ip_list_file_pat, 'r')
+        return pickle.load(f)
+
     #fetch data from apnic
     print "Fetching data from apnic.net, it might take a few minutes, please wait..."
     url=r'http://ftp.apnic.net/apnic/stats/apnic/delegated-apnic-latest'
@@ -518,6 +538,8 @@ def fetch_ip_data():
             results.append((ip2long(starting_ip), ip2long(mask), mask2))
             prev_net = starting_ip
 
+    f = open(ip_list_file_pat, 'w')
+    pickle.dump(results, f)
     return results
 
 
@@ -539,3 +561,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
     generate_pac(args.proxy)
     pac_server(int(args.port))
+
